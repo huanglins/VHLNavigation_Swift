@@ -9,7 +9,7 @@ Pod::Spec.new do |s|
   s.author       = { "vincent" => "gvincent@163.com" }
   s.platform     = :ios, "9.0"
   s.source       = { :git => "https://github.com/huanglins/VHLNavigation_Swift.git", :tag => s.version }
-  s.source_files = "VHLNavigation/*.{h,m}"
+  s.source_files = "VHLNavigation/*.{h,m,swift}"
   s.requires_arc = true
   s.social_media_url = "https://github.com/huanglins"
 
