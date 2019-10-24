@@ -3,6 +3,7 @@ Pod::Spec.new do |s|
 
   s.name         = "VHLNavigation_Swift"
   s.version      = "1.0"
+
   s.summary      = "navigationbar color / Dynamic blur / background image/ alpha / hidden"
   s.homepage     = "https://github.com/huanglins/VHLNavigation_Swift"
   s.license      = { :type => "MIT", :file => "LICENSE" }
@@ -12,5 +13,7 @@ Pod::Spec.new do |s|
   s.source_files = "VHLNavigation/*.{h,m,swift}"
   s.requires_arc = true
   s.social_media_url = "https://github.com/huanglins"
+
+  s.swift_version = '5.0'
 
 end

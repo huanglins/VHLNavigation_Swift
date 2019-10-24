@@ -23,7 +23,7 @@ OC 版 [VHLNavigation](https://github.com/huanglins/VHLNavigation)
 # 如何使用
 手动拖入 将 `VHLNavigation` 文件夹拽入项目中
 
-或者通过 pod 导入 `pod 'VHLNavigationSwift'`
+或者通过 pod 导入 `pod 'VHLNavigation_Swift'`
 
 导入头文件：`#import "VHLNavigation.h"`
 
