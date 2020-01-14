@@ -160,16 +160,14 @@ extension UINavigationBar {
         if backgroundImageView == nil {
             // add a image(nil color) to _UIBarBackground make it clear
             setBackgroundImage(UIImage(), for: .default)
-            let bgFrame = CGRect(x: 0, y: 0, width: self.bounds.width, height: VHLNavigation.isIPhoneXSeries() ? 84: 64)
-            self.backgroundImageView = UIImageView(frame: self.subviews.first?.bounds ?? bgFrame)
-            if let backgroundImageView = self.backgroundImageView {
-                backgroundImageView.autoresizingMask = [.flexibleWidth,
-                                                        .flexibleHeight,
-                                                        .flexibleBottomMargin]
-                if self.subviews.count > 0 {
-                    self.subviews.first?.insertSubview(backgroundImageView, at: 0)
-                } else {
-                    self.insertSubview(backgroundImageView, at: 0)
+            if let superView = self.subviews.first {
+                self.backgroundImageView = UIImageView(frame: superView.bounds)
+                if let backgroundImageView = self.backgroundImageView {
+                    backgroundImageView.tag = 10102
+                    backgroundImageView.autoresizingMask = [.flexibleWidth,
+                                                            .flexibleHeight,
+                                                            .flexibleBottomMargin]
+                    superView.insertSubview(backgroundImageView, at: 0)
                 }
             }
         }
@@ -188,19 +186,16 @@ extension UINavigationBar {
         }
         
         if backgroundView == nil {
-            let bgFrame = CGRect(x: 0, y: 0, width: self.bounds.width, height: VHLNavigation.isIPhoneXSeries() ? 84: 64)
-            // add a image(nil color) to _UIBarBackground make it clear
-            setBackgroundImage(UIImage(), for: .default)
-            self.backgroundView = UIView(frame: self.subviews.first?.bounds ?? bgFrame)
-            self.backgroundView?.tag = bgViewTag
-            if let backgroundView = self.backgroundView {
-                backgroundView.autoresizingMask = [.flexibleWidth,
-                                                   .flexibleHeight,
-                                                   .flexibleBottomMargin]
-                if self.subviews.count > 0 {
-                    self.subviews.first?.insertSubview(backgroundView, at: 0)
-                } else {
-                    self.insertSubview(backgroundView, at: 0)
+            if let superView = self.subviews.first {
+                // add a image(nil color) to _UIBarBackground make it clear
+                setBackgroundImage(UIImage(), for: .default)
+                self.backgroundView = UIView(frame: superView.bounds)
+                self.backgroundView?.tag = bgViewTag
+                if let backgroundView = self.backgroundView {
+                    backgroundView.autoresizingMask = [.flexibleWidth,
+                                                       .flexibleHeight,
+                                                       .flexibleBottomMargin]
+                    superView.insertSubview(backgroundView, at: 0)
                 }
             }
         }
@@ -264,6 +259,9 @@ extension UINavigationBar {
     // MARK: 分割线是否隐藏
     public func vhl_setShadowImageIsHidden(_ isHidden: Bool) {
         self.shadowImage = isHidden ? UIImage() : nil
+        // iOS 11 后设置 shadowImage 无效
+        self.setValue(isHidden, forKey: "hidesShadow")
+        self.layoutIfNeeded()
     }
     // MARK: 设置/获取导航栏偏移量
     public func vhl_setTranslationY(y: CGFloat) {
@@ -835,7 +833,7 @@ extension UIViewController {
             }
         }
     }
-    @objc func vhl_viewWillAppear(_ animated: Bool) {
+    @objc private func vhl_viewWillAppear(_ animated: Bool) {
         if self.canUpdateNavigationBar() && !self.isIgnoreVC() {
             self.pushToNextVCFinished = false
             self.setNeedsStatusBarAppearanceUpdate()        // 更新状态栏
@@ -858,7 +856,9 @@ extension UIViewController {
                 if !self.vhl_navBarHide && !self.isIgnoreVC() {
                     // ** 当两个VC都是颜色过渡的时候，这里不设置背景，不然会闪动一下 **
                     // ** 模态跳转下，需要更新导航背景，不然有概率出现白色背景
-                    if self.fakeNavBar != nil && (!self.isNavTransition() || self.isRootViewController()) {
+                    if self.fakeNavBar != nil &&
+                        (!self.isNavTransition() || self.isRootViewController()) ||
+                        (self.isMotalFrom() || self.isMotalTo()) {
                         self.updateNavigationBackground()
                     }
                     navVC.setNeedsNavigationBarUpdate(tintColor: self.vhl_navBarTintColor)
@@ -869,7 +869,7 @@ extension UIViewController {
         // 调用自己
         vhl_viewWillAppear(animated)
     }
-    @objc func vhl_viewDidAppear(_ animated: Bool) {
+    @objc private func vhl_viewDidAppear(_ animated: Bool) {
         if !self.isRootViewController() { self.pushToCurrentVCFinished = true }
         self.removeFakeNavigationBar()      // 移除假的导航栏
         
@@ -891,7 +891,7 @@ extension UIViewController {
         // 调用自己
         vhl_viewDidAppear(animated)
     }
-    @objc func vhl_viewWillDisappear(_ animated: Bool) {
+    @objc private func vhl_viewWillDisappear(_ animated: Bool) {
         if self.canUpdateNavigationBar() && !self.isIgnoreVC() {
             if let navVC = self.navigationController {
                 // 导航栏是否隐藏
@@ -902,7 +902,7 @@ extension UIViewController {
         // 调用自己
         vhl_viewWillDisappear(animated)
     }
-    @objc func vhl_viewDidDisappear(_ animated: Bool) {
+    @objc private func vhl_viewDidDisappear(_ animated: Bool) {
         if self.canUpdateNavigationBar() {
             // 移除假的导航栏
             self.removeFakeNavigationBar()
@@ -1060,7 +1060,7 @@ fileprivate extension UIViewController {
 
         return false
     }
-    // 添加一个假的导航栏
+    // MARK: 添加一个假的导航栏
     func addFakeNavigationBar() {
         guard let fromVC = self.fromVC() else { return }
         guard let toVC = self.toVC() else { return }
@@ -1082,7 +1082,9 @@ fileprivate extension UIViewController {
             }
             // 2. 判断当前 vc 是否是 UITableViewController 或 UICollectionViewController , 因为这种 vc.view 会为 scrollview
             // ** 虽然 view frame 为全屏开始，但是因为安全区域，使得内容视图在导航栏下面 **
-            if fromVC.view.isKind(of: UIScrollView.self) {
+            if fromVC.view.isKind(of: UIScrollView.self) ||
+                fromVC.edgesForExtendedLayout == UIRectEdge.init(rawValue: 0) ||
+                fromVC.view.bounds.height < fromVC.navigationController?.view.bounds.height ?? 0.0 {
                 fakeNavFrame = fromVC.view.convert(fakeNavFrame, from: fromVC.navigationController?.view)
             }
             //
@@ -1143,7 +1145,9 @@ fileprivate extension UIViewController {
             }
             // 2. 判断当前 vc 是否是 UITableViewController 或 UICollectionViewController , 因为这种 vc.view 会为 scrollview
             // ** 虽然 view frame 为全屏开始，但是因为安全区域，使得内容视图在导航栏下面 **
-            if toVC.view.isKind(of: UIScrollView.self) {
+            if toVC.view.isKind(of: UIScrollView.self) ||
+                toVC.edgesForExtendedLayout == UIRectEdge.init(rawValue: 0) ||
+                toVC.view.bounds.height < toVC.navigationController?.view.bounds.height ?? 0.0 {
                 fakeNavFrame = toVC.view.convert(fakeNavFrame, from: toVC.navigationController?.view)
             }
             //
@@ -1192,20 +1196,7 @@ fileprivate extension UIViewController {
         }
     }
 }
-// MARK: - UIApplication 程序第一次运行时注入运行时注入
-extension UIApplication {
-    private static let vhl_runOnce: Void = {        // 使用静态变量。用于只调用一次
-        UINavigationBar.vhl_hookMethods()
-        UIViewController.vhl_hookMethods()
-        UINavigationController.vhl_navHookMethods()
-    }()
-    
-    open override var next: UIResponder? {
-        UIApplication.vhl_runOnce
-        return super.next
-    }
-}
-// MARK: DispatchQueue 单例执行
+// MARK: - DispatchQueue 单例执行
 fileprivate extension DispatchQueue {
     private static var onceTracker = [String]()
     //Executes a block of code, associated with a unique token, only once.  The code is thread safe and will only execute the code once even in the presence of multithreaded calls.
@@ -1222,6 +1213,20 @@ fileprivate extension DispatchQueue {
         onceTracker.append(token)
         block()
     }
+}
+// MARK: - UIApplication 程序第一次运行时注入运行时注入
+// 这里需要自己手动调用进行注入
+extension UIApplication {
+    static let VHLNavigation_runOnce: Void = {        // 使用静态变量。用于只调用一次
+        UINavigationBar.vhl_hookMethods()
+        UIViewController.vhl_hookMethods()
+        UINavigationController.vhl_navHookMethods()
+    }()
+    /// ** 当多个地方调用时会报错 **
+//    open override var next: UIResponder? {
+//        UIApplication.VHLNavigation_runOnce
+//        return super.next
+//    }
 }
 
 /**
