@@ -444,6 +444,7 @@ extension UINavigationController: UINavigationBarDelegate {
     }
     @objc fileprivate func pushNeedDisplay() {
         guard let topViewController = self.topViewController, let coordinator = topViewController.transitionCoordinator else { return }
+        if topViewController.isMotalFrom() { return }
         
         VHLPushProperties.displayCount += 1
         let pushProgress = VHLPushProperties.pushProgress
@@ -777,7 +778,7 @@ extension UIViewController {
         }
     }
     /// 当前状态栏样式
-    var statusBarStyle: UIStatusBarStyle {
+    var vhl_statusBarStyle: UIStatusBarStyle {
         get {
             guard let style = objc_getAssociatedObject(self, &AssociatedKeys.statusBarStyle) as? UIStatusBarStyle else {
                 return .default
@@ -985,12 +986,12 @@ fileprivate extension UIViewController {
         }
         return false
     }
-    // MARK: 当前是否进行了模态跳转
+    /// 当前是否进行了模态跳转
     func isMotalTo() -> Bool {
         if self.presentedViewController != nil { return true }
         return false
     }
-    // MARK: 当前是否是模态跳转而来
+    /// 当前是否是模态跳转而来
     func isMotalFrom() -> Bool {
         if self.presentingViewController != nil { return true }
         return false
@@ -1223,10 +1224,10 @@ extension UIApplication {
         UINavigationController.vhl_navHookMethods()
     }()
     /// ** 当多个地方调用时会报错 **
-//    open override var next: UIResponder? {
-//        UIApplication.VHLNavigation_runOnce
-//        return super.next
-//    }
+    open override var next: UIResponder? {
+        UIApplication.VHLNavigation_runOnce
+        return super.next
+    }
 }
 
 /**
