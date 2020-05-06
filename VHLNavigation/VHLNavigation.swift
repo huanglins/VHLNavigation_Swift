@@ -26,12 +26,25 @@ class VHLNavigation: NSObject {
     var ignoreVCList: Set<String> = []              // 忽略的 viewControllers 列表
     
     override init() {
-        // 添加默认忽略的系统VC
-        self.ignoreVCList.insert("PUPhotoPickerHostViewController") // 相册选择
+
+    }
+    
+    static func hook() {
+        UINavigationBar.vhl_hookMethods()
+        UIViewController.vhl_hookMethods()
+        UINavigationController.vhl_navHookMethods()
     }
 }
 extension VHLNavigation {
     func isIgnoreVC(_ vcName: String) -> Bool {
+        // 忽略系统类
+        let systemClassPrefixs = ["_UI", "UI", "SF", "MFMail", "PUPhoto", "CKSMS"]
+        for prefix in systemClassPrefixs {
+            if vcName.hasPrefix(prefix) {
+                return true
+            }
+        }
+        
         return self.ignoreVCList.contains(vcName)
     }
     func addIgnoreVCName(_ vcName: String) {
@@ -1219,11 +1232,9 @@ fileprivate extension DispatchQueue {
 // 这里需要自己手动调用进行注入
 extension UIApplication {
     static let VHLNavigation_runOnce: Void = {        // 使用静态变量。用于只调用一次
-        UINavigationBar.vhl_hookMethods()
-        UIViewController.vhl_hookMethods()
-        UINavigationController.vhl_navHookMethods()
+        VHLNavigation.hook()
     }()
-    /// ** 当多个地方调用时会报错 **
+    // iOS 13.4 下因为有 UIScene 会不生效
     open override var next: UIResponder? {
         UIApplication.VHLNavigation_runOnce
         return super.next

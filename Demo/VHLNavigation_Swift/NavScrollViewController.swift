@@ -54,6 +54,6 @@ extension NavScrollViewController: UIScrollViewDelegate {
         if #available(iOS 11.0, *) {
              offsetY += scrollView.adjustedContentInset.top
         }
-        self.vhl_navTranslationY = -offsetY
+        self.vhl_navTranslationY = min(0, -offsetY)
     }
 }

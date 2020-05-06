@@ -19,6 +19,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         window?.backgroundColor = UIColor.white
         window?.makeKeyAndVisible()
         
+        VHLNavigation.hook()
         VHLNavigation.def.navBarShadowImageHidden = true
         
         let vc = BaseTestViewController()

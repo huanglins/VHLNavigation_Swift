@@ -26,12 +26,7 @@ class VHLNavigation: NSObject {
     var ignoreVCList: Set<String> = []              // 忽略的 viewControllers 列表
     
     override init() {
-        // 添加默认忽略的系统VC
-        self.ignoreVCList.insert("PUPhotoPickerHostViewController") // 相册选择
-        
-        //self.ignoreVCList.insert("MFMailComposeViewController")     // 发送邮件
-        //self.ignoreVCList.insert("MFMailComposeRemoteViewController")
-        self.ignoreVCList.insert("MFMailComposeInternalViewController")
+
     }
     
     static func hook() {
@@ -42,6 +37,14 @@ class VHLNavigation: NSObject {
 }
 extension VHLNavigation {
     func isIgnoreVC(_ vcName: String) -> Bool {
+        // 忽略系统类
+        let systemClassPrefixs = ["_UI", "UI", "SF", "MFMail", "PUPhoto", "CKSMS"]
+        for prefix in systemClassPrefixs {
+            if vcName.hasPrefix(prefix) {
+                return true
+            }
+        }
+        
         return self.ignoreVCList.contains(vcName)
     }
     func addIgnoreVCName(_ vcName: String) {
