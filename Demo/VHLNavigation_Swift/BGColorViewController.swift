@@ -20,4 +20,9 @@ class BGColorViewController: BaseTestViewController {
         self.vhl_navBarTitleColor = getRandomColor()
         self.vhl_navBarShadowImageHide = false
     }
+    
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesBegan(touches, with: event)
+        self.vhl_navBarHide = !self.vhl_navBarHide
+    }
 }

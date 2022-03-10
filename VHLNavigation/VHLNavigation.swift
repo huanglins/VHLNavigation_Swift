@@ -38,7 +38,7 @@ class VHLNavigation: NSObject {
 extension VHLNavigation {
     func isIgnoreVC(_ vcName: String) -> Bool {
         // 忽略系统类
-        let systemClassPrefixs = ["_UI", "UI", "SF", "MFMail", "PUPhoto", "CKSMS"]
+        let systemClassPrefixs = ["_UI", "UI", "SFSafari", "MFMail", "PUPhoto", "CKSMS", "MPMedia"]
         for prefix in systemClassPrefixs {
             if vcName.hasPrefix(prefix) {
                 return true
@@ -148,19 +148,21 @@ extension UINavigationBar {
             }
         }
         
-        let viewCopyData = NSKeyedArchiver.archivedData(withRootObject: view)
-        if let viewCopy = NSKeyedUnarchiver.unarchiveObject(with: viewCopyData) as? UIView {
-            self.backgroundView = viewCopy
-            if let backgroundView = self.backgroundView {
-                backgroundView.frame = self.subviews.first!.bounds
-                backgroundView.autoresizingMask = [.flexibleWidth,
-                                                   .flexibleHeight,
-                                                   .flexibleBottomMargin]
-                /// iOS 11 下导航栏不显示问题
-                if self.subviews.count > 0 {
-                    self.subviews.first?.insertSubview(backgroundView, at: 0)
-                } else {
-                    self.insertSubview(backgroundView, at: 0)
+        if let viewCopyData = try? NSKeyedArchiver.archivedData(withRootObject: view, requiringSecureCoding: false) {
+//            if let viewCopy = try? NSKeyedUnarchiver.unarchivedObject(ofClass: UIView.self, from: viewCopyData) {
+            if let viewCopy = NSKeyedUnarchiver.unarchiveObject(with: viewCopyData) as? UIView {
+                self.backgroundView = viewCopy
+                if let backgroundView = self.backgroundView {
+                    backgroundView.frame = self.subviews.first!.bounds
+                    backgroundView.autoresizingMask = [.flexibleWidth,
+                                                       .flexibleHeight,
+                                                       .flexibleBottomMargin]
+                    /// iOS 11 下导航栏不显示问题
+                    if self.subviews.count > 0 {
+                        self.subviews.first?.insertSubview(backgroundView, at: 0)
+                    } else {
+                        self.insertSubview(backgroundView, at: 0)
+                    }
                 }
             }
         }
@@ -301,7 +303,7 @@ extension UINavigationBar {
             }
         }
     }
-    @objc func vhl_setTitleTextAttributes(_ newTitleTextAttributes:[String : Any]?) {
+    @objc func vhl_setTitleTextAttributes(_ newTitleTextAttributes:[NSAttributedString.Key : Any]?) {
         guard var attributes = newTitleTextAttributes else { return }
         
         guard let originTitleTextAttributes = titleTextAttributes else {
@@ -322,9 +324,12 @@ extension UINavigationBar {
             return
         }
 
-        if attributes[NSAttributedString.Key.foregroundColor.rawValue] == nil {
-            attributes.updateValue(originTitleColor, forKey: NSAttributedString.Key.foregroundColor.rawValue)
+        if attributes[NSAttributedString.Key.foregroundColor] == nil {
+            attributes.updateValue(originTitleColor, forKey: NSAttributedString.Key.foregroundColor)
         }
+        
+        // crash: 'Have you sent -vhl_setTitleTextAttributes:
+        /// ** VHLNavigation.hook()  需要将在 viewController 初始化的最前面调用 **
         vhl_setTitleTextAttributes(attributes)
     }
 }
@@ -584,7 +589,7 @@ extension UIViewController {
     fileprivate struct AssociatedKeys {
         // 跳转到当前是否已完成
         static var pushToCurrentVCFinished: Bool = false
-        // 调整到下一个 VC 是否已完成
+        // 跳转到下一个 VC 是否已完成
         static var pushToNextVCFinished: Bool = false
         
         // 当前导航栏切换样式
@@ -678,7 +683,7 @@ extension UIViewController {
         }
         set {
             objc_setAssociatedObject(self, &AssociatedKeys.navBarHide, newValue, .OBJC_ASSOCIATION_ASSIGN)
-            if pushToNextVCFinished == false {
+            if pushToCurrentVCFinished {
                 navigationController?.setNavigationBarHidden(newValue, animated: true)
             }
         }
@@ -859,7 +864,7 @@ extension UIViewController {
                     navVC.navigationBar.vhl_setBarBackIndicatorViewIsHidden(false)
                 }
                 // 当前导航栏是否隐藏
-                navVC.setNavigationBarHidden(self.vhl_navBarHide, animated: true)
+                navVC.setNavigationBarHidden(self.vhl_navBarHide, animated: animated)
                 // 恢复导航栏偏移
                 self.vhl_navTranslationY = 0.0      // 修复导航栏偏移
                 // 添加一个假的导航栏
@@ -868,11 +873,11 @@ extension UIViewController {
                 }
                 // 更新导航栏信息
                 if !self.vhl_navBarHide && !self.isIgnoreVC() {
+                    let isModal = (self.isMotalFrom() || self.isMotalTo())
+
                     // ** 当两个VC都是颜色过渡的时候，这里不设置背景，不然会闪动一下 **
                     // ** 模态跳转下，需要更新导航背景，不然有概率出现白色背景
-                    if self.fakeNavBar != nil &&
-                        (!self.isNavTransition() || self.isRootViewController()) ||
-                        (self.isMotalFrom() || self.isMotalTo()) {
+                    if self.fakeNavBar != nil && (!self.isNavTransition() || self.isRootViewController()) || isModal {
                         self.updateNavigationBackground()
                     }
                     navVC.setNeedsNavigationBarUpdate(tintColor: self.vhl_navBarTintColor)
@@ -906,11 +911,9 @@ extension UIViewController {
         vhl_viewDidAppear(animated)
     }
     @objc private func vhl_viewWillDisappear(_ animated: Bool) {
-        if self.canUpdateNavigationBar() && !self.isIgnoreVC() {
-            if let navVC = self.navigationController {
-                // 导航栏是否隐藏
-                navVC.setNavigationBarHidden(self.vhl_navBarHide, animated: true)
-            }
+        if self.canUpdateNavigationBar() && !self.isIgnoreVC() && !self.isMotalTo() {
+            // 取消隐藏导航栏
+            self.navigationController?.setNavigationBarHidden(self.vhl_navBarHide, animated: animated) // self.vhl_navBarHide
             self.pushToNextVCFinished = true
         }
         // 调用自己
@@ -986,8 +989,19 @@ fileprivate extension UIViewController {
         
         return true
     }
+    // MARK: 是否是被忽略的 viewController
+    func isIgnoreVC() -> Bool {
+        if let selfClassName = NSStringFromClass(self.classForCoder).components(separatedBy: ".").last {
+            return VHLNavigation.def.isIgnoreVC(selfClassName)
+        }
+        return false
+    }
+}
+extension UIViewController {
     // 判断当前是否是第一个视图
     func isRootViewController() -> Bool {
+        if self.navigationController?.viewControllers.count ?? 0 > 1 { return false }
+        
         if let rootVC = self.navigationController?.viewControllers.first {
             if rootVC.isKind(of: UITabBarController.self) {
                 if let tabbarVC = rootVC as? UITabBarController {
@@ -1006,16 +1020,17 @@ fileprivate extension UIViewController {
     }
     /// 当前是否是模态跳转而来
     func isMotalFrom() -> Bool {
+        if let viewControllers = self.navigationController?.viewControllers {
+            if viewControllers.count > 1 {
+                if viewControllers.last! == self {
+                    return false
+                }
+            }
+        }
         if self.presentingViewController != nil { return true }
         return false
     }
-    // MARK: 是否是被忽略的 viewController
-    func isIgnoreVC() -> Bool {
-        if let selfClassName = NSStringFromClass(self.classForCoder).components(separatedBy: ".").last {
-            return VHLNavigation.def.isIgnoreVC(selfClassName)
-        }
-        return false
-    }
+    
     // MARK: from VC
     func fromVC() -> UIViewController? {
         return self.navigationController?.topViewController?.transitionCoordinator?.viewController(forKey: .from)
@@ -1084,6 +1099,8 @@ fileprivate extension UIViewController {
         
         if fromVC.isIgnoreVC() && toVC.isIgnoreVC() { return }
         
+        let isTranslucent = self.navigationController?.navigationBar.isTranslucent ?? true
+        
         if !fromVC.vhl_navBarHide {
             // 添加假导航栏
             var fakeNavFrame = CGRect(x: 0, y: 0, width: self.view.bounds.width, height: self.navigationBarAndStatusBarHeight())
@@ -1108,17 +1125,20 @@ fileprivate extension UIViewController {
                     fakeNavBar.backgroundColor = .clear
                     
                     /// ** 这里需要对 view 进行拷贝，避免 UINavigationBar 中对 bgView 移除操作
-                    let bgViewCopyData = NSKeyedArchiver.archivedData(withRootObject: bgView)
-                    if let bgViewCopy = NSKeyedUnarchiver.unarchiveObject(with: bgViewCopyData) as? UIView {
-                        bgViewCopy.frame = fakeNavFrame
-                        fakeNavBar.addSubview(bgViewCopy)
+                    if let viewCopyData = try? NSKeyedArchiver.archivedData(withRootObject: bgView, requiringSecureCoding: false) {
+//                        if let viewCopy = try? NSKeyedUnarchiver.unarchivedObject(ofClass: UIView.self, from: bgViewCopyData) {
+                        if let viewCopy = NSKeyedUnarchiver.unarchiveObject(with: viewCopyData) as? UIView {
+                            viewCopy.frame = fakeNavFrame
+                            fakeNavBar.addSubview(viewCopy)
+                        }
                     }
                 } else {
+                    fakeNavBar.backgroundColor = fromVC.vhl_navBarBackgroundColor
                     if #available(iOS 13.0, *) {        // iOS 13 下导航栏透明度问题
-                        fakeNavBar.backgroundColor = fromVC.vhl_navBarBackgroundColor.withAlphaComponent(fromVC.vhl_navBarBackgroundAlpha)
-                        
-                    } else {
-                        fakeNavBar.backgroundColor = fromVC.vhl_navBarBackgroundColor
+                        /// 非 .clear 的情况
+                        if fromVC.vhl_navBarBackgroundColor != UIColor.clear {
+                            fakeNavBar.backgroundColor = fromVC.vhl_navBarBackgroundColor.withAlphaComponent(fromVC.vhl_navBarBackgroundAlpha)
+                        }
                     }
                     fakeNavBar.image = fromVC.vhl_navBarBackgroundImage
                     // 如果是忽略的VC，且默认的背景颜色有值
@@ -1150,13 +1170,20 @@ fileprivate extension UIViewController {
         if !toVC.vhl_navBarHide {
             // 添加假导航栏
             var fakeNavFrame = CGRect(x: 0, y: 0, width: self.view.bounds.width, height: self.navigationBarAndStatusBarHeight())
+            
             if #available(iOS 13.0, *) {        // iOS 13 模态跳转
                 if let navVC = self.navigationController {
-                    if toVC.isMotalFrom() && navVC.modalPresentationStyle == .pageSheet {
+                    if fromVC.isMotalFrom() && navVC.modalPresentationStyle == .pageSheet {
                         fakeNavFrame = CGRect(x: 0, y: 0, width: self.view.bounds.width, height: self.navigationBarHeight())
                     }
                 }
             }
+            
+            // 当前 fromVC 隐藏导航栏，且 isTranslucent = false 时。toVC 的 fakeNav 位置会不正确
+            if fromVC.vhl_navBarHide && !isTranslucent {
+                fakeNavFrame.origin.y = -fakeNavFrame.height
+            }
+            
             // 2. 判断当前 vc 是否是 UITableViewController 或 UICollectionViewController , 因为这种 vc.view 会为 scrollview
             // ** 虽然 view frame 为全屏开始，但是因为安全区域，使得内容视图在导航栏下面 **
             if toVC.view.isKind(of: UIScrollView.self) ||
@@ -1170,17 +1197,20 @@ fileprivate extension UIViewController {
                 if let bgView = toVC.vhl_navBarBackgroundView {
                     fakeNavBar.backgroundColor = .clear
                     
-                    let bgViewCopyData = NSKeyedArchiver.archivedData(withRootObject: bgView)
-                    if let bgViewCopy = NSKeyedUnarchiver.unarchiveObject(with: bgViewCopyData) as? UIView {
-                        bgViewCopy.frame = fakeNavFrame
-                        fakeNavBar.addSubview(bgViewCopy)
+                    if let viewCopyData = try? NSKeyedArchiver.archivedData(withRootObject: bgView, requiringSecureCoding: false) {
+//                        if let bgViewCopy = try? NSKeyedUnarchiver.unarchivedObject(ofClass: UIView.self, from: bgViewCopyData) {
+                        if let viewCopy = NSKeyedUnarchiver.unarchiveObject(with: viewCopyData) as? UIView {
+                            viewCopy.frame = fakeNavFrame
+                            fakeNavBar.addSubview(viewCopy)
+                        }
                     }
                 } else {
+                    fakeNavBar.backgroundColor = toVC.vhl_navBarBackgroundColor
                     if #available(iOS 13.0, *) {        // iOS 13 下导航栏透明度问题
-                        fakeNavBar.backgroundColor = toVC.vhl_navBarBackgroundColor.withAlphaComponent(toVC.vhl_navBarBackgroundAlpha)
-                        
-                    } else {
-                        fakeNavBar.backgroundColor = toVC.vhl_navBarBackgroundColor
+                        /// 非 .clear 的情况
+                        if toVC.vhl_navBarBackgroundColor != UIColor.clear {
+                            fakeNavBar.backgroundColor = toVC.vhl_navBarBackgroundColor.withAlphaComponent(toVC.vhl_navBarBackgroundAlpha)
+                        }
                     }
                     fakeNavBar.image = toVC.vhl_navBarBackgroundImage
                     // 如果是忽略的VC，且默认的背景颜色有值
@@ -1231,14 +1261,18 @@ fileprivate extension DispatchQueue {
 // MARK: - UIApplication 程序第一次运行时注入运行时注入
 // 这里需要自己手动调用进行注入
 extension UIApplication {
+    /// ** VHLNavigation.hook()  需要将在 viewController 初始化的最前面调用 **
+    static func VHLNavigationHook() {
+        VHLNavigation.hook()
+    }
     static let VHLNavigation_runOnce: Void = {        // 使用静态变量。用于只调用一次
         VHLNavigation.hook()
     }()
     // iOS 13.4 下因为有 UIScene 会不生效
-    open override var next: UIResponder? {
-        UIApplication.VHLNavigation_runOnce
-        return super.next
-    }
+//    open override var next: UIResponder? {
+//        UIApplication.VHLNavigation_runOnce
+//        return super.next
+//    }
 }
 
 /**
